@@ -117,6 +117,36 @@ Exact outcomes depend on server settings, game version, and Valve-side changes. 
 
 ---
 
+## Automated releases
+
+Pushes and merges to `main` trigger [`.github/workflows/release.yml`](.github/workflows/release.yml), which:
+
+1. Calculates the next version from the latest `vMajor.Minor.Fix` tag
+2. Builds `SteamFirewallBlocker.exe` on Windows
+3. Publishes a GitHub Release with a zipped package and release notes from commits since the last tag
+
+### Version bump keywords
+
+Include **one** of these in a commit message (case-insensitive). If several appear across commits since the last release, the **highest** bump wins.
+
+| Bump | Keywords |
+|------|----------|
+| **Major** | `#major`, `version:major`, `[major]` |
+| **Minor** | `#minor`, `version:minor`, `[minor]` |
+| **Fix** | `#fix`, `version:fix`, `[fix]`, `#patch`, `version:patch`, `[patch]` |
+
+If no keyword is present, the workflow defaults to a **fix** bump (`v1.2.3` → `v1.2.4`).
+
+Examples:
+
+```
+#minor Add manual executable picker for steamwebhelper.exe
+#fix Correct CEF path detection for steamwebhelper.exe
+#major Rewrite firewall rule naming scheme
+```
+
+---
+
 ## License & attribution
 
 Created by **Revoxxi**. For educational and research purposes.
