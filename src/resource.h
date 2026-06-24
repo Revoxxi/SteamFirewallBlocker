@@ -5,6 +5,7 @@
 
 #define IDC_PROGRAM_LIST     1001
 #define IDC_BTN_ADD          1002
+#define IDC_BTN_ADD_MANUAL   1011
 #define IDC_BTN_REMOVE       1003
 #define IDC_BTN_TOGGLE       1004
 #define IDC_HOTKEY_DISPLAY   1005

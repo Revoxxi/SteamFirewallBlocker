@@ -114,6 +114,43 @@ std::wstring JoinPath(const std::wstring& directory, const std::wstring& fileNam
     return JoinPath(directory, fileName.c_str());
 }
 
+std::wstring JoinRelativePath(const std::wstring& baseDirectory, const wchar_t* relativePath) {
+    wchar_t buffer[MAX_PATH] = {};
+    wcscpy_s(buffer, baseDirectory.c_str());
+
+    wchar_t relativeCopy[MAX_PATH] = {};
+    wcscpy_s(relativeCopy, relativePath);
+
+    wchar_t* context = nullptr;
+    for (wchar_t* part = wcstok_s(relativeCopy, L"\\", &context); part != nullptr;
+         part = wcstok_s(nullptr, L"\\", &context)) {
+        PathAppendW(buffer, part);
+    }
+
+    return buffer;
+}
+
+std::vector<std::wstring> RelativePathsForExecutable(const wchar_t* executableName) {
+    if (_wcsicmp(executableName, L"steamwebhelper.exe") == 0) {
+        return {
+            L"steamwebhelper.exe",
+            L"bin\\steamwebhelper.exe",
+            L"bin\\cef\\cef.win64\\steamwebhelper.exe",
+            L"bin\\cef\\cef.win7x64\\steamwebhelper.exe",
+        };
+    }
+    if (_wcsicmp(executableName, L"steamservice.exe") == 0) {
+        return {
+            L"steamservice.exe",
+            L"bin\\steamservice.exe",
+        };
+    }
+    return {
+        L"steam.exe",
+        L"bin\\steam.exe",
+    };
+}
+
 std::vector<std::wstring> CollectSteamExecutablePaths(const std::wstring& steamDirectory) {
     static const wchar_t* kExecutableNames[] = {
         L"steam.exe",
@@ -123,12 +160,8 @@ std::vector<std::wstring> CollectSteamExecutablePaths(const std::wstring& steamD
 
     std::vector<std::wstring> paths;
     for (const wchar_t* executableName : kExecutableNames) {
-        const std::wstring candidates[] = {
-            JoinPath(steamDirectory, executableName),
-            JoinPath(JoinPath(steamDirectory, L"bin"), executableName),
-        };
-
-        for (const std::wstring& candidate : candidates) {
+        for (const std::wstring& relativePath : RelativePathsForExecutable(executableName)) {
+            const std::wstring candidate = JoinRelativePath(steamDirectory, relativePath.c_str());
             if (!PathFileExistsW(candidate.c_str()) || !IsAllowedSteamProgram(candidate)) {
                 continue;
             }
@@ -227,6 +260,69 @@ bool AddSteamPrograms(AppState* app) {
     app->config.Save();
     RefreshProgramList(app);
     SetStatusText(app->statusBar, L"Steam programs added.");
+    return true;
+}
+
+bool AddProgramManual(AppState* app) {
+    wchar_t filePath[MAX_PATH] = {};
+    std::wstring initialDirectory;
+    const std::wstring installPath = FindSteamInstallPath();
+    if (!installPath.empty()) {
+        const std::wstring cefDirectory =
+            JoinRelativePath(installPath, L"bin\\cef\\cef.win64");
+        if (PathFileExistsW(cefDirectory.c_str())) {
+            initialDirectory = cefDirectory;
+        } else {
+            initialDirectory = installPath;
+        }
+    }
+
+    OPENFILENAMEW ofn = {};
+    ofn.lStructSize = sizeof(ofn);
+    ofn.hwndOwner = app->hwnd;
+    ofn.lpstrFilter =
+        L"Steam executables\0steam.exe;steamservice.exe;steamwebhelper.exe\0"
+        L"Executables (*.exe)\0*.exe\0";
+    ofn.lpstrFile = filePath;
+    ofn.nMaxFile = MAX_PATH;
+    ofn.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+    ofn.lpstrTitle = L"Select Steam executable";
+    if (!initialDirectory.empty()) {
+        ofn.lpstrInitialDir = initialDirectory.c_str();
+    }
+
+    if (!GetOpenFileNameW(&ofn)) {
+        return false;
+    }
+
+    if (!IsAllowedSteamProgram(filePath)) {
+        MessageBoxW(
+            app->hwnd,
+            L"Only steam.exe, steamservice.exe, and steamwebhelper.exe can be added.",
+            kAppTitle,
+            MB_ICONWARNING);
+        return false;
+    }
+
+    const std::wstring selectedPath = filePath;
+    const std::wstring selectedName = SteamExecutableName(selectedPath);
+    for (auto& program : app->config.programs) {
+        if (SteamExecutableName(program.path) == selectedName) {
+            program.path = selectedPath;
+            app->config.Save();
+            RefreshProgramList(app);
+            SetStatusText(app->statusBar, L"Updated path for " + FileNameFromPath(selectedPath) + L".");
+            return true;
+        }
+    }
+
+    ProgramEntry entry;
+    entry.path = selectedPath;
+    entry.blocked = false;
+    app->config.programs.push_back(entry);
+    app->config.Save();
+    RefreshProgramList(app);
+    SetStatusText(app->statusBar, L"Added " + FileNameFromPath(selectedPath) + L".");
     return true;
 }
 
@@ -469,6 +565,8 @@ void LayoutControls(HWND hwnd, AppState* app) {
     int buttonTop = listTop;
     MoveWindow(GetDlgItem(hwnd, IDC_BTN_ADD), buttonLeft, buttonTop, buttonWidth, buttonHeight, TRUE);
     buttonTop += buttonHeight + 8;
+    MoveWindow(GetDlgItem(hwnd, IDC_BTN_ADD_MANUAL), buttonLeft, buttonTop, buttonWidth, buttonHeight, TRUE);
+    buttonTop += buttonHeight + 8;
     MoveWindow(GetDlgItem(hwnd, IDC_BTN_REMOVE), buttonLeft, buttonTop, buttonWidth, buttonHeight, TRUE);
     buttonTop += buttonHeight + 8;
     MoveWindow(GetDlgItem(hwnd, IDC_BTN_TOGGLE), buttonLeft, buttonTop, buttonWidth, buttonHeight, TRUE);
@@ -485,7 +583,7 @@ HWND CreateMainWindow(HINSTANCE instance, AppState* app) {
         CW_USEDEFAULT,
         CW_USEDEFAULT,
         900,
-        560,
+        580,
         nullptr,
         nullptr,
         instance,
@@ -619,10 +717,24 @@ HWND CreateMainWindow(HINSTANCE instance, AppState* app) {
     CreateWindowExW(
         0,
         L"BUTTON",
-        L"Remove",
+        L"Add Manual",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         720,
         130,
+        120,
+        28,
+        hwnd,
+        reinterpret_cast<HMENU>(static_cast<INT_PTR>(IDC_BTN_ADD_MANUAL)),
+        instance,
+        nullptr);
+
+    CreateWindowExW(
+        0,
+        L"BUTTON",
+        L"Remove",
+        WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        720,
+        166,
         120,
         28,
         hwnd,
@@ -636,7 +748,7 @@ HWND CreateMainWindow(HINSTANCE instance, AppState* app) {
         L"Toggle Selected",
         WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         720,
-        166,
+        202,
         120,
         28,
         hwnd,
@@ -689,6 +801,9 @@ LRESULT CALLBACK MainWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lPar
             switch (LOWORD(wParam)) {
                 case IDC_BTN_ADD:
                     AddSteamPrograms(app);
+                    return 0;
+                case IDC_BTN_ADD_MANUAL:
+                    AddProgramManual(app);
                     return 0;
                 case IDC_BTN_REMOVE:
                     RemoveSelectedProgram(app);

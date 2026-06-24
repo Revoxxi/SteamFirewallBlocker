@@ -89,7 +89,7 @@ cmake --build build
 ## Setup
 
 1. Run `SteamFirewallBlocker.exe` as Administrator.
-2. Click **Add Steam** — auto-detects your Steam install and adds `steam.exe`, `steamservice.exe`, and `steamwebhelper.exe`.
+2. Click **Add Steam** to auto-detect executables, or **Add Manual** to pick a path (e.g. `bin\cef\cef.win64\steamwebhelper.exe`).
 3. Click **Set Hotkey** and press a combination (must include Ctrl, Shift, or Alt).
 
 Only those three Steam executables can be added.
