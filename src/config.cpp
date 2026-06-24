@@ -46,7 +46,8 @@ bool IsAllowedSteamProgram(const std::wstring& path) {
     const wchar_t* name = PathFindFileNameW(path.c_str());
     std::wstring fileName = name ? std::wstring(name) : path;
     std::transform(fileName.begin(), fileName.end(), fileName.begin(), ::towlower);
-    return fileName == L"steam.exe" || fileName == L"steamservice.exe";
+    return fileName == L"steam.exe" || fileName == L"steamservice.exe" ||
+           fileName == L"steamwebhelper.exe";
 }
 
 std::wstring Config::GetConfigPath() {

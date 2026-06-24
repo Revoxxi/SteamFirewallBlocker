@@ -2,7 +2,7 @@
 
 **Supplied by Revoxxi**
 
-A Windows utility that toggles firewall blocks on `steam.exe` and `steamservice.exe` with a hotkey. It was built around a Counter-Strike reconnect/ban interaction and is intended for **educational use** — understanding how Steam connectivity affects in-game kick and cooldown behavior.
+A Windows utility that toggles firewall blocks on `steam.exe`, `steamservice.exe`, and `steamwebhelper.exe` with a hotkey. It was built around a Counter-Strike reconnect/ban interaction and is intended for **educational use** — understanding how Steam connectivity affects in-game kick and cooldown behavior.
 
 > **Disclaimer:** Using this tool to circumvent bans, grief other players, or exploit online games may violate game Terms of Service and result in account penalties. Use at your own risk, preferably in controlled environments where you have permission to test (private servers, offline, research, etc.).
 
@@ -10,7 +10,9 @@ A Windows utility that toggles firewall blocks on `steam.exe` and `steamservice.
 
 ## What problem does this address?
 
-In Counter-Strike, team damage can trigger a kick or ban from the current session. There is a known interaction where **cutting Steam’s connection at the correct times** affects whether that penalty sticks when going back to the menu — enabling the reconnect button and letting you rejoin if you time it during freezetime (typically with a friend calling the timing).
+In Counter-Strike, team damage can trigger a kick or ban from the current session. There is a known interaction where **cutting Steam’s connection at the correct times** affects whether that penalty sticks when you return to the menu — leaving the **Reconnect** button available so you can rejoin the match.
+
+This matches how the exploit is described publicly (e.g. Portmaster tutorials on Steam forums): block Steam’s outgoing connections **before** the kick, then reconnect after restoring connectivity.
 
 The important part is **when** you block and unblock:
 
@@ -20,11 +22,11 @@ The important part is **when** you block and unblock:
 | 2 | Teamkill (e.g. a cheater in spawn on your team) |
 | 3 | You are sent **back to the menu** from the team-damage kick/ban |
 | 4 | **Unblock Steam** (hotkey) while **in the menu** |
-| 5 | **Reconnect during freezetime** — you stay in instead of being removed |
+| 5 | Click **Reconnect** to rejoin the match |
 
-Blocking **after** the teamkill is too late. You **unblock in the menu**, not mid-round. The freezetime reconnect comes **after** Steam is unblocked.
+Blocking **after** the teamkill is too late. You **unblock in the menu**, then **reconnect** — no special freezetime timing is required in the public write-ups; unblock and use the reconnect button.
 
-The affected player typically still gets a **cooldown** unless their own team votes to kick them.
+If you hit **max team damage**, you may still receive a **cooldown after the match**, but you can often rejoin and continue that game. A **vote kick** from your team still applies normally.
 
 This documents a **CS flaw / edge case** in how Steam connectivity and session state interact. The tool does not modify game files or inject into the client; it only blocks Steam executables at the Windows Firewall level.
 
@@ -44,7 +46,8 @@ This documents a **CS flaw / edge case** in how Steam connectivity and session s
 |-----------|----------|
 | `steam.exe` | Blocked / unblocked via Windows Firewall rules |
 | `steamservice.exe` | Blocked / unblocked via Windows Firewall rules |
-| Hotkey | Toggles both executables between **Blocked** and **Allowed** |
+| `steamwebhelper.exe` | Blocked / unblocked via Windows Firewall rules |
+| Hotkey | Toggles all listed executables between **Blocked** and **Allowed** |
 | UI | Add Steam, per-entry toggle, hotkey configuration |
 
 For each executable, the app creates inbound and outbound **block** rules (group: `SteamFirewallBlocker`). Blocking **enables** the rules; allowing **disables** them. Rules persist across restarts; toggling is instant.
@@ -86,10 +89,10 @@ cmake --build build
 ## Setup
 
 1. Run `SteamFirewallBlocker.exe` as Administrator.
-2. Click **Add Steam** — auto-detects your Steam install and adds `steam.exe` + `steamservice.exe`.
+2. Click **Add Steam** — auto-detects your Steam install and adds `steam.exe`, `steamservice.exe`, and `steamwebhelper.exe`.
 3. Click **Set Hotkey** and press a combination (must include Ctrl, Shift, or Alt).
 
-Only `steam.exe` and `steamservice.exe` can be added.
+Only those three Steam executables can be added.
 
 ---
 
@@ -102,13 +105,13 @@ Only `steam.exe` and `steamservice.exe` can be added.
         ↓
 [Back in menu]     →  Hotkey: UNBLOCK Steam
         ↓
-[Freezetime]       →  Reconnect
+                   →  Click Reconnect
 ```
 
 1. **Block first** — press the hotkey to block Steam **before** you teamkill. If Steam is still connected when the kill happens, this will not work.
 2. **Teamkill** — kill the target (e.g. cheater in spawn).
 3. **Unblock in the menu** — once you are kicked back to the **menu**, press the hotkey again to restore Steam’s connection. Do not unblock mid-round.
-4. **Reconnect in freezetime** — rejoin the match during freezetime before the kick fully resolves.
+4. **Reconnect** — click the **Reconnect** button to rejoin the match.
 
 Exact outcomes depend on server settings, game version, and Valve-side changes. This tool only controls the firewall.
 

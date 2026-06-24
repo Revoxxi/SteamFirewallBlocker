@@ -110,6 +110,46 @@ std::wstring JoinPath(const std::wstring& directory, const wchar_t* fileName) {
     return buffer;
 }
 
+std::wstring JoinPath(const std::wstring& directory, const std::wstring& fileName) {
+    return JoinPath(directory, fileName.c_str());
+}
+
+std::vector<std::wstring> CollectSteamExecutablePaths(const std::wstring& steamDirectory) {
+    static const wchar_t* kExecutableNames[] = {
+        L"steam.exe",
+        L"steamservice.exe",
+        L"steamwebhelper.exe",
+    };
+
+    std::vector<std::wstring> paths;
+    for (const wchar_t* executableName : kExecutableNames) {
+        const std::wstring candidates[] = {
+            JoinPath(steamDirectory, executableName),
+            JoinPath(JoinPath(steamDirectory, L"bin"), executableName),
+        };
+
+        for (const std::wstring& candidate : candidates) {
+            if (!PathFileExistsW(candidate.c_str()) || !IsAllowedSteamProgram(candidate)) {
+                continue;
+            }
+
+            const std::wstring name = SteamExecutableName(candidate);
+            const bool alreadyListed = std::any_of(
+                paths.begin(),
+                paths.end(),
+                [&](const std::wstring& existing) {
+                    return SteamExecutableName(existing) == name;
+                });
+            if (!alreadyListed) {
+                paths.push_back(candidate);
+            }
+            break;
+        }
+    }
+
+    return paths;
+}
+
 void SetStatusText(HWND statusBar, const std::wstring& text);
 void RefreshProgramList(AppState* app);
 
@@ -142,40 +182,28 @@ bool PromptForSteamExecutable(HWND owner, std::wstring& steamExePath) {
 }
 
 bool AddSteamPrograms(AppState* app) {
-    std::wstring steamExePath;
-    std::wstring steamServicePath;
+    std::wstring steamDirectory;
 
     const std::wstring installPath = FindSteamInstallPath();
-    if (!installPath.empty()) {
-        const std::wstring candidateSteam = JoinPath(installPath, L"steam.exe");
-        const std::wstring candidateService = JoinPath(installPath, L"steamservice.exe");
-        if (PathFileExistsW(candidateSteam.c_str())) {
-            steamExePath = candidateSteam;
-            if (PathFileExistsW(candidateService.c_str())) {
-                steamServicePath = candidateService;
-            }
+    if (!installPath.empty() && PathFileExistsW(JoinPath(installPath, L"steam.exe").c_str())) {
+        steamDirectory = installPath;
+    }
+
+    if (steamDirectory.empty()) {
+        std::wstring steamExePath;
+        if (!PromptForSteamExecutable(app->hwnd, steamExePath)) {
+            return false;
         }
+
+        wchar_t directory[MAX_PATH] = {};
+        wcscpy_s(directory, steamExePath.c_str());
+        PathRemoveFileSpecW(directory);
+        steamDirectory = directory;
     }
 
-    if (steamExePath.empty() && !PromptForSteamExecutable(app->hwnd, steamExePath)) {
-        return false;
-    }
-
-    if (steamServicePath.empty()) {
-        wchar_t steamDirectory[MAX_PATH] = {};
-        wcscpy_s(steamDirectory, steamExePath.c_str());
-        PathRemoveFileSpecW(steamDirectory);
-        steamServicePath = JoinPath(steamDirectory, L"steamservice.exe");
-    }
-
+    const std::vector<std::wstring> candidates = CollectSteamExecutablePaths(steamDirectory);
     int addedCount = 0;
-    for (const std::wstring& path : {steamExePath, steamServicePath}) {
-        if (path.empty() || !PathFileExistsW(path.c_str())) {
-            continue;
-        }
-        if (!IsAllowedSteamProgram(path)) {
-            continue;
-        }
+    for (const std::wstring& path : candidates) {
         if (IsProgramNameListed(app->config.programs, path)) {
             continue;
         }
@@ -190,7 +218,7 @@ bool AddSteamPrograms(AppState* app) {
     if (addedCount == 0) {
         MessageBoxW(
             app->hwnd,
-            L"steam.exe and steamservice.exe are already in the list, or steamservice.exe was not found.",
+            L"All Steam executables are already listed, or steamwebhelper.exe was not found.",
             kAppTitle,
             MB_ICONINFORMATION);
         return false;
@@ -283,7 +311,7 @@ void ToggleAllPrograms(AppState* app) {
             app->statusBar,
             targetBlocked
                 ? L"Steam blocked. Teamkill now."
-                : L"Steam unblocked. Reconnect during freezetime.");
+                : L"Steam unblocked. Click Reconnect in the menu.");
     } else {
         const std::wstring details = app->firewall.LastErrorMessage();
         if (!details.empty()) {
@@ -793,7 +821,7 @@ int WINAPI wWinMain(HINSTANCE instance, HINSTANCE, PWSTR, int showCommand) {
     } else {
         SetStatusText(
             app->statusBar,
-            L"Ready. Block before teamkill → unblock in menu → reconnect in freezetime.");
+            L"Ready. Block before teamkill → unblock in menu → click Reconnect.");
     }
 
     ShowWindow(hwnd, showCommand);
